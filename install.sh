@@ -218,6 +218,62 @@ for dir in /usr/local/bin "$HOME/.local/bin" "$HOME/bin"; do
 done
 ok "Launcher: claude-remote (available globally)"
 
+# ── Auto-start on login ────────────────────────────────────────────────────────
+step "[ 6b / 6 ]  Setting up auto-start on login..."
+
+if [ "$OS" = "mac" ]; then
+    PLIST="$HOME/Library/LaunchAgents/com.xrlabs.claude-remote.plist"
+    cat > "$PLIST" << PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.xrlabs.claude-remote</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>$INSTALL_DIR/claude-remote</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>$HOME/.remote-terminal/server.log</string>
+    <key>StandardErrorPath</key>
+    <string>$HOME/.remote-terminal/server.log</string>
+</dict>
+</plist>
+PLIST_EOF
+    # Unload old if exists, then load fresh
+    launchctl unload "$PLIST" 2>/dev/null || true
+    launchctl load -w "$PLIST"
+    ok "Auto-start: registered as macOS Login Item (LaunchAgent)"
+
+elif [ "$OS" = "linux" ] && command -v systemctl &>/dev/null; then
+    SERVICE_DIR="$HOME/.config/systemd/user"
+    mkdir -p "$SERVICE_DIR"
+    cat > "$SERVICE_DIR/claude-remote.service" << SERVICE_EOF
+[Unit]
+Description=Claude Remote Terminal Server
+After=network.target
+
+[Service]
+ExecStart=$INSTALL_DIR/claude-remote
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target
+SERVICE_EOF
+    systemctl --user daemon-reload
+    systemctl --user enable claude-remote.service
+    systemctl --user start claude-remote.service
+    ok "Auto-start: registered as systemd user service (claude-remote.service)"
+else
+    warn "Auto-start: not configured (systemd not found)"
+fi
+
 # ── Get IP ─────────────────────────────────────────────────────────────────────
 if [ "$OS" = "mac" ]; then
     IP=$(ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "unknown")
@@ -238,20 +294,22 @@ echo -e "  IP Address : ${CYAN}$IP${NC}"
 echo -e "  Port       : ${CYAN}8765${NC}"
 echo -e "  Token      : ${CYAN}xrlabs-remote-terminal-2024${NC}"
 echo ""
+echo -e "  ${BOLD}Server is running${NC} ${DIM}(started automatically)${NC}"
+echo -e "  ${DIM}Logs → $HOME/.remote-terminal/server.log${NC}"
+echo ""
 echo -e "  ${BOLD}Get started${NC}"
 echo -e "  ─────────────────────────────────────────"
 echo -e "  1. Install the APK on your Android phone"
 echo -e "     ${CYAN}https://github.com/$REPO/releases/latest${NC}"
 echo ""
-echo -e "  2. Start the server:"
-echo -e "     ${CYAN}claude-remote${NC}"
-echo ""
-echo -e "  3. In the phone app, connect to:"
-echo -e "     ${CYAN}ws://$IP:8765${NC}"
+echo -e "  2. Open the app — it will find your Mac automatically"
 echo ""
 if command -v claude &>/dev/null; then
-echo -e "  4. In any Claude Code session, run:"
+echo -e "  3. In any Claude Code session, run:"
 echo -e "     ${CYAN}/continue-remote${NC}"
 echo -e "     ${DIM}→ your phone opens that session automatically${NC}"
 echo ""
 fi
+echo -e "  ${DIM}To stop the server:  launchctl unload ~/Library/LaunchAgents/com.xrlabs.claude-remote.plist${NC}"
+echo -e "  ${DIM}To restart:          launchctl kickstart -k gui/\$(id -u)/com.xrlabs.claude-remote${NC}"
+echo ""
