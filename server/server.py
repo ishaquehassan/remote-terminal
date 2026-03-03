@@ -27,6 +27,8 @@ import threading
 import uuid
 import socket as socket_module
 from collections import defaultdict
+import random
+import time
 
 PORT = 8765
 AUTH_TOKEN = "xrlabs-remote-terminal-2024"
@@ -38,6 +40,27 @@ IS_MAC = platform.system() == "Darwin"
 sessions = {}
 client_queues = defaultdict(list)
 all_client_queues = []  # one queue per connected WebSocket — used for global broadcasts
+
+# ── Pairing ────────────────────────────────────────────────────────────────────
+PAIRED_FILE = os.path.expanduser("~/.remote-terminal/paired_devices.json")
+
+def load_paired():
+    try:
+        with open(PAIRED_FILE) as f:
+            return set(json.load(f))
+    except Exception:
+        return set()
+
+def save_paired(devices):
+    try:
+        os.makedirs(os.path.dirname(PAIRED_FILE), exist_ok=True)
+        with open(PAIRED_FILE, "w") as f:
+            json.dump(list(devices), f)
+    except Exception:
+        pass
+
+paired_devices = load_paired()
+pending_pairs  = {}  # device_id -> {"code": "1234", "expires": float}
 
 
 # ─── PTY helpers ──────────────────────────────────────────────────────────────
@@ -373,12 +396,58 @@ async def handler(websocket):
                 continue
 
             if t == "auth":
-                if msg.get("token") == AUTH_TOKEN:
+                if msg.get("token") != AUTH_TOKEN:
+                    await tx({"type": "auth_fail"})
+                    continue
+                device_id = msg.get("device_id", "")
+                if device_id and device_id in paired_devices:
+                    # Already paired — let through
                     authed = True
                     await tx({"type": "auth_ok"})
                     await tx({"type": "sessions_list", "sessions": sessions_list()})
+                elif device_id:
+                    # New device — generate pairing code
+                    code = f"{random.randint(0, 9999):04d}"
+                    pending_pairs[device_id] = {
+                        "code": code,
+                        "expires": time.time() + 120,
+                    }
+                    # Print on Mac terminal — very visible
+                    digits = "  ".join(list(code))
+                    print("\n\033[1;33m" + "╔══════════════════════════════════════╗")
+                    print("║                                      ║")
+                    print("║   PAIRING REQUEST — New Device       ║")
+                    print("║                                      ║")
+                    print(f"║        [ {digits} ]              ║")
+                    print("║                                      ║")
+                    print("║   Enter this code on your phone      ║")
+                    print("║   Expires in 2 minutes               ║")
+                    print("║                                      ║")
+                    print("╚══════════════════════════════════════╝\033[0m\n")
+                    await tx({"type": "pair_required"})
                 else:
-                    await tx({"type": "auth_fail"})
+                    # No device_id (old client) — allow without pairing
+                    authed = True
+                    await tx({"type": "auth_ok"})
+                    await tx({"type": "sessions_list", "sessions": sessions_list()})
+                continue
+
+            if t == "pair_verify":
+                device_id = msg.get("device_id", "")
+                code      = msg.get("code", "")
+                pair      = pending_pairs.get(device_id)
+                if pair and time.time() < pair["expires"] and pair["code"] == code:
+                    paired_devices.add(device_id)
+                    save_paired(paired_devices)
+                    pending_pairs.pop(device_id, None)
+                    authed = True
+                    print(f"\033[1;32m[server] Device {device_id[:8]}... paired successfully\033[0m")
+                    await tx({"type": "pair_ok"})
+                    await tx({"type": "auth_ok"})
+                    await tx({"type": "sessions_list", "sessions": sessions_list()})
+                else:
+                    pending_pairs.pop(device_id, None)
+                    await tx({"type": "pair_fail"})
                 continue
 
             if not authed:

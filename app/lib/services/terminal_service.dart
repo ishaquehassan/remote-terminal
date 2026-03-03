@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:math';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:web_socket_channel/web_socket_channel.dart';
@@ -43,6 +45,36 @@ class TerminalService extends ChangeNotifier {
   Completer<String>? _pendingNewSession;
   String? autoOpenSessionId; // set when server requests auto-navigation
 
+  // Pairing
+  bool isPairRequired = false;
+  bool pairFailed = false;
+  String? _deviceId;
+
+  Future<String> _getDeviceId() async {
+    if (_deviceId != null) return _deviceId!;
+    final prefs = await SharedPreferences.getInstance();
+    var id = prefs.getString('device_id');
+    if (id == null) {
+      final rng = Random.secure();
+      id = List.generate(16, (_) => rng.nextInt(256).toRadixString(16).padLeft(2, '0')).join();
+      await prefs.setString('device_id', id);
+    }
+    _deviceId = id;
+    return id;
+  }
+
+  Future<void> verifyPairCode(String code) async {
+    pairFailed = false;
+    notifyListeners();
+    _send({'type': 'pair_verify', 'device_id': _deviceId ?? '', 'code': code});
+  }
+
+  void resetPairing() {
+    isPairRequired = false;
+    pairFailed = false;
+    notifyListeners();
+  }
+
   Future<void> connect(String host, int port, String token) async {
     _savedHost = host;
     _savedPort = port;
@@ -63,7 +95,8 @@ class TerminalService extends ChangeNotifier {
         onDone: _onDone,
       );
 
-      _send({'type': 'auth', 'token': token});
+      final deviceId = await _getDeviceId();
+      _send({'type': 'auth', 'token': token, 'device_id': deviceId});
     } catch (e) {
       errorMsg = 'Connection failed: $e';
       isConnecting = false;
@@ -100,7 +133,8 @@ class TerminalService extends ChangeNotifier {
         onDone: _onDone,
       );
 
-      _send({'type': 'auth', 'token': _savedToken ?? ''});
+      final deviceId = await _getDeviceId();
+      _send({'type': 'auth', 'token': _savedToken ?? '', 'device_id': deviceId});
     } catch (e) {
       isConnecting = false;
       notifyListeners();
@@ -192,6 +226,24 @@ class TerminalService extends ChangeNotifier {
           final sid = msg['session_id'] as String;
           autoOpenSessions.add(sid);
           autoOpenSessionId = sid;
+          notifyListeners();
+          break;
+
+        case 'pair_required':
+          isPairRequired = true;
+          pairFailed = false;
+          isConnecting = false;
+          notifyListeners();
+          break;
+
+        case 'pair_ok':
+          isPairRequired = false;
+          pairFailed = false;
+          notifyListeners();
+          break;
+
+        case 'pair_fail':
+          pairFailed = true;
           notifyListeners();
           break;
 
@@ -344,6 +396,8 @@ class TerminalService extends ChangeNotifier {
     autoOpenSessions.clear();
     _sizes.clear();
     activeSessionId = null;
+    isPairRequired = false;
+    pairFailed = false;
     notifyListeners();
   }
 

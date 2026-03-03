@@ -7,6 +7,7 @@ import '../services/language_service.dart';
 import '../services/discovery_service.dart';
 import '../l10n.dart';
 import 'sessions_screen.dart';
+import 'pairing_screen.dart';
 
 class ConnectScreen extends StatefulWidget {
   const ConnectScreen({super.key});
@@ -131,6 +132,14 @@ class _ConnectScreenState extends State<ConnectScreen>
         if (mounted) {
           Navigator.of(context).pushReplacement(
             MaterialPageRoute(builder: (_) => const SessionsScreen()),
+          );
+        }
+      });
+    } else if (svc.isPairRequired) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PairingScreen()),
           );
         }
       });
