@@ -72,7 +72,8 @@ curl -fsSL https://raw.githubusercontent.com/ishaquehassan/remote-terminal/main/
 That's it. The installer will:
 - Detect your OS (macOS, Debian/Ubuntu, Arch, Fedora, WSL)
 - Install Python 3, `websockets`, and `tmux` if missing
-- Set up the server and register the `/continue-remote` Claude Code command
+- Optionally install **Claude Code** (`@anthropic-ai/claude-code`) — includes Node.js if needed
+- Set up the `/continue-remote` slash command for Claude Code
 - Print your local IP and the command to start the server
 
 ### Step 2 — Install the APK on your Android phone
