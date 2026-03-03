@@ -53,6 +53,10 @@ class _ConnectScreenState extends State<ConnectScreen>
     _pulse = Tween(begin: 0.6, end: 1.0).animate(
       CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
     );
+    // Register service listener after first frame so context is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<TerminalService>().addListener(_onServiceChange);
+    });
     _loadPrefs().then((_) {
       if (!widget.forceShowList && _hostCtrl.text.trim().isNotEmpty) {
         _autoConnect();
@@ -64,12 +68,48 @@ class _ConnectScreenState extends State<ConnectScreen>
 
   @override
   void dispose() {
+    context.read<TerminalService>().removeListener(_onServiceChange);
     _radarCtrl.dispose();
     _pulseCtrl.dispose();
     _hostCtrl.dispose();
     _portCtrl.dispose();
     _tokenCtrl.dispose();
     super.dispose();
+  }
+
+  void _onServiceChange() {
+    if (!mounted) return;
+    final svc = context.read<TerminalService>();
+
+    if (svc.isConnected) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const SessionsScreen()),
+        );
+      });
+      return;
+    }
+
+    if (svc.isPairRequired && !_pairingPushed) {
+      _pairingPushed = true;
+      if (_autoConnecting) setState(() => _autoConnecting = false);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) { _pairingPushed = false; return; }
+        Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const PairingScreen()),
+        ).then((_) {
+          if (mounted) setState(() => _pairingPushed = false);
+        });
+      });
+      return;
+    }
+
+    // Auto-connect failed (not pair_required, not connected, not connecting)
+    if (_autoConnecting && !svc.isConnecting && !svc.isPairRequired) {
+      setState(() => _autoConnecting = false);
+      _scan();
+    }
   }
 
   Future<void> _loadPrefs() async {
@@ -151,35 +191,6 @@ class _ConnectScreenState extends State<ConnectScreen>
     final svc = context.watch<TerminalService>();
     final lang = context.watch<LanguageService>();
     final s = S(lang.isUrdu);
-
-    if (svc.isConnected) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (_) => const SessionsScreen()),
-          );
-        }
-      });
-    } else if (svc.isPairRequired && !_pairingPushed) {
-      _pairingPushed = true;
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => const PairingScreen()),
-          ).then((_) {
-            if (mounted) setState(() => _pairingPushed = false);
-          });
-        }
-      });
-    } else if (_autoConnecting && !svc.isConnecting && !svc.isConnected) {
-      // auto-connect attempt failed — fallback to scan
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) {
-          setState(() => _autoConnecting = false);
-          _scan();
-        }
-      });
-    }
 
     return Scaffold(
       backgroundColor: const Color(0xFF0D0B09),
