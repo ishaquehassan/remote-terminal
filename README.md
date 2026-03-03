@@ -4,16 +4,15 @@
 
 ## Claude Remote
 
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Android-blue?style=flat-square&logo=apple)](https://github.com/ishaquehassan/claude-remote-terminal)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Android-orange?style=flat-square&logo=apple)](https://github.com/ishaquehassan/claude-remote-terminal)
 [![Python](https://img.shields.io/badge/python-3.10%2B-yellow?style=flat-square&logo=python)](https://www.python.org/)
 [![Flutter](https://img.shields.io/badge/flutter-3.x-54C5F8?style=flat-square&logo=flutter)](https://flutter.dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
-[![WebSocket](https://img.shields.io/badge/protocol-WebSocket-orange?style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API)
-[![tmux](https://img.shields.io/badge/backed%20by-tmux-1BB91F?style=flat-square)](https://github.com/tmux/tmux)
+[![Claude Code](https://img.shields.io/badge/built%20for-Claude%20Code-E07845?style=flat-square)](https://claude.ai/download)
 
-**Control your Mac or Linux terminal from your Android phone — over WebSocket, in real time.**
+**Claude Code on your Android phone — resume AI coding sessions anywhere, over WebSocket PTY.**
 
-[Quick Install](#-quick-install) · [Features](#-features) · [Architecture](#-architecture) · [/continue-remote](#-continue-remote) · [Manual Setup](#-manual-setup)
+[Quick Install](#-quick-install) · [Features](#-features) · [/continue-remote](#-continue-remote) · [Architecture](#-architecture) · [Manual Setup](#-manual-setup)
 
 </div>
 
@@ -21,31 +20,24 @@
 
 ## What Is This?
 
-Remote Terminal turns your Android phone into a full terminal client for your Mac or Linux machine. A lightweight Python WebSocket server runs on your computer, exposing real PTY sessions to a Flutter app on your phone. Shell sessions are backed by **tmux** — so whatever you start on your phone, you can pick up exactly where you left off in iTerm2 on your desktop, and vice versa. Claude Code sessions run as direct PTY with `--continue` support, letting you hand off AI coding sessions between devices seamlessly.
+Claude Remote turns your Android phone into a full Claude Code terminal. A lightweight Python WebSocket server runs on your Mac or Linux machine — the app auto-discovers it on your local network, shows all available servers with their PC names, and connects in one tap.
+
+Run `claude --continue` sessions from your phone. Type `/continue-remote` in Claude Code on your Mac and the session jumps to your phone automatically, resuming the exact conversation. Full PTY — real colors, real signals, real terminal.
 
 ---
 
 ## ✨ Features
 
-- 🔌 **WebSocket PTY** — Full terminal emulation over WebSocket. Real PTY, real signals, real colors.
-- 🧠 **tmux-backed shell sessions** — Start a session on your phone, continue it on your Mac. Same state, same history, same everything.
-- 🤖 **Claude Code integration** — Run `claude --continue` sessions directly from your phone. Resumable AI sessions across devices.
-- 📲 **`/continue-remote` slash command** — Inside Claude Code on your Mac, run `/continue-remote` and your active session instantly appears on your phone.
-- 🔄 **Auto-reconnect** — The Flutter app automatically reconnects if the connection drops. Never lose context.
-- 🏷️ **Session rename** — Name your tmux sessions from the app for easy organization.
-- 🌐 **Language toggle** — Switch the app UI between English and Urdu (Roman) on the fly.
-- ⌨️ **Extra keys bar** — Tap-accessible special keys: Tab, Ctrl, Escape, arrow keys, and more — built for mobile use.
-- 🍎 **iTerm2 handoff** — Shell sessions seamlessly hand off to iTerm2 via `tmux attach`. Claude sessions hand off via `claude --continue`.
+- 🔍 **Auto-discovery** — App scans your network on startup, shows all available servers with PC hostname. No IP hunting.
+- 🤖 **Claude Code first** — Built specifically for Claude Code. One button: "New Claude Session". Nothing else.
+- 📲 **`/continue-remote` slash command** — Type it in Claude Code on your Mac, session instantly opens on your phone.
+- 🔄 **Auto-reconnect** — App reconnects automatically if the connection drops. Never lose context.
+- 🍎 **iTerm2 handoff** — Switch a Claude session back to your Mac's iTerm2 mid-conversation.
+- ⌨️ **Mobile-optimized keys bar** — Tab, Ctrl+D, Esc, arrow keys — all tap-accessible at the bottom.
+- 🏷️ **Session rename** — Name your sessions for easy organization.
+- 🌐 **EN / UR language toggle** — Switch UI language on the fly.
 - 🖥️ **Cross-platform server** — macOS (Homebrew), Linux (apt / pacman / dnf), Windows via WSL.
-- ⚡ **Zero-hang async core** — All subprocess calls wrapped in `asyncio.to_thread()` — the event loop never blocks.
-
----
-
-## 📸 Demo
-
-> Screenshots and screen recordings are available in the [`/screenshots`](screenshots/) directory.
-
-The Flutter app connects to your server over your local network (or via SSH tunnel for remote access). You get a full terminal with proper color support, resize handling, and session management — all from your phone.
+- ⚡ **Zero-hang async core** — All subprocess calls in `asyncio.to_thread()` — the event loop never blocks.
 
 ---
 
@@ -57,123 +49,63 @@ The Flutter app connects to your server over your local network (or via SSH tunn
 curl -fsSL https://raw.githubusercontent.com/ishaquehassan/claude-remote-terminal/main/install.sh | bash
 ```
 
-That's it. The installer will:
-- Detect your OS (macOS, Debian/Ubuntu, Arch, Fedora, WSL)
-- Install Python 3, `websockets`, and `tmux` if missing
-- Optionally install **Claude Code** (`@anthropic-ai/claude-code`) — includes Node.js if needed
-- Set up the `/continue-remote` slash command for Claude Code
-- Print your local IP and the command to start the server
+The installer handles everything:
+- Detects your OS (macOS, Debian/Ubuntu, Arch, Fedora, WSL)
+- Installs Python 3, `websockets`, and `tmux` if missing
+- Optionally installs **Claude Code** (`@anthropic-ai/claude-code`) — includes Node.js if needed
+- Sets up the `/continue-remote` slash command
+- Creates a global `remote-terminal` launcher
 
-### Step 2 — Install the APK on your Android phone
+Then start the server:
 
-Download the latest APK from [Releases](https://github.com/ishaquehassan/claude-remote-terminal/releases) and install it on your phone.
+```bash
+remote-terminal
+```
 
-Open the app, enter your computer's local IP address (printed by the installer), and connect.
+### Step 2 — Install the app on your Android phone
 
-**That's the entire setup.**
+Download `claude-remote-v1.0.0.apk` from [Releases](https://github.com/ishaquehassan/claude-remote-terminal/releases/latest) and install it.
+
+Open the app — it auto-scans your network and shows your Mac by name. Tap to connect.
+
+**That's it.**
 
 ---
 
-## 🔧 Manual Setup
+## 🔍 Auto-Discovery
 
-If you prefer to clone and run manually:
+When you open the app, it immediately scans your local network for running servers. No need to look up your IP address.
 
-### Prerequisites
+Each found server shows:
+- **PC hostname** — e.g. `Ishaq-MacBook-Pro.local`
+- **IP address** — e.g. `192.168.1.5`
+- A **Connect** button — tap once to connect
 
-| Tool | Version | Required For |
-|------|---------|-------------|
-| Python | 3.10+ | Server runtime |
-| pip | latest | Python deps |
-| tmux | any | Shell sessions |
-| Flutter | 3.x | Building the app |
-
-### Server Setup
-
-```bash
-# Clone the repo
-git clone https://github.com/ishaquehassan/claude-remote-terminal.git
-cd remote-terminal
-
-# Install Python dependencies
-pip3 install -r server/requirements.txt
-
-# Run the server
-python3 server/server.py
-```
-
-### App Setup
-
-```bash
-cd app
-
-# Get Flutter dependencies
-flutter pub get
-
-# Run on connected Android device
-flutter run
-
-# Or build APK
-flutter build apk --release
-```
-
----
-
-## ⚙️ Configuration
-
-Open `server/server.py` and edit the top-level constants:
-
-```python
-PORT = 8765                            # WebSocket port — change if 8765 is taken
-AUTH_TOKEN = "xrlabs-remote-terminal-2024"  # Change this to something secret
-```
-
-In the Flutter app, enter the same IP, port, and token in the connection screen.
-
-For remote access over the internet, run the server behind an SSH tunnel:
-
-```bash
-# On your phone, tunnel via SSH to your Mac
-ssh -L 8765:localhost:8765 user@your-mac-ip
-# Then connect the app to localhost:8765
-```
+If multiple people on the same network have the server running, you'll see all of them — pick the right one by name.
 
 ---
 
 ## 🤖 /continue-remote
 
-`/continue-remote` is a custom Claude Code slash command that hands off your current Claude session to your phone in one step.
+Type `/continue-remote` in any Claude Code session on your Mac. Your phone opens that exact session automatically — `claude --continue` resumes the full conversation.
 
-### How It Works
+### How it works
 
-1. You are working in a Claude Code session on your Mac
-2. You type `/continue-remote` in Claude Code
-3. Claude executes `python3 ~/.claude/scripts/continue_remote.py`
-4. The script broadcasts the current session info (cwd, session ID) to all connected WebSocket clients
-5. Your phone receives the signal and opens the Claude session automatically — with `--continue`, resuming the exact conversation
+1. You're coding with Claude on your Mac
+2. You type `/continue-remote`
+3. Claude runs `python3 ~/.claude/scripts/continue_remote.py`
+4. The script connects to your server and broadcasts the session (with current working directory)
+5. Your phone receives it and navigates directly to the terminal
 
 ### Setup
 
-The installer copies the command definition into `~/.claude/commands/continue-remote.md` and the script into `~/.claude/scripts/continue_remote.py` automatically.
-
-If you installed manually:
+The installer does this automatically. Manual setup:
 
 ```bash
-# Copy the command definition
 cp commands/continue-remote.md ~/.claude/commands/
-
-# Copy the script
 mkdir -p ~/.claude/scripts
 cp scripts/continue_remote.py ~/.claude/scripts/
 ```
-
-### Usage
-
-```
-# Inside any Claude Code session on your Mac:
-/continue-remote
-```
-
-Your phone receives the session within seconds. Open the Remote Terminal app and the Claude session is already there, resumable with full context.
 
 ---
 
@@ -184,136 +116,110 @@ Your phone receives the session within seconds. Open the Remote Terminal app and
 │                         YOUR COMPUTER                           │
 │                                                                 │
 │   ┌──────────┐    ┌──────────────────────┐    ┌─────────────┐  │
-│   │  iTerm2  │◄──►│   tmux session(s)    │◄──►│    Shell    │  │
-│   │  (local) │    └──────────────────────┘    │  (zsh/bash) │  │
-│   └──────────┘              ▲                 └─────────────┘  │
-│                             │                                   │
-│   ┌──────────┐    ┌─────────┴────────────┐    ┌─────────────┐  │
-│   │  Claude  │◄──►│  Python WebSocket    │◄──►│  Claude PTY │  │
-│   │ (local)  │    │  Server (asyncio)    │    │  (direct)   │  │
+│   │  iTerm2  │◄──►│   Python WebSocket   │◄──►│  Claude PTY │  │
+│   │ (local)  │    │   Server (asyncio)   │    │  (direct)   │  │
 │   └──────────┘    └──────────────────────┘    └─────────────┘  │
 │                             ▲                                   │
 └─────────────────────────────│───────────────────────────────────┘
-                              │ WebSocket (ws://)
-                              │ LAN / SSH tunnel
+                              │ WebSocket  ws://
+                              │ LAN — auto-discovered
 ┌─────────────────────────────│───────────────────────────────────┐
 │                    ANDROID PHONE                                │
 │                             │                                   │
-│              ┌──────────────▼──────────────┐                   │
-│              │     Flutter App             │                   │
-│              │                             │                   │
-│              │  ┌─────────┐ ┌───────────┐  │                   │
-│              │  │Terminal │ │ Sessions  │  │                   │
-│              │  │Emulator │ │  Manager  │  │                   │
-│              │  └─────────┘ └───────────┘  │                   │
-│              │                             │                   │
-│              │  ┌─────────────────────┐    │                   │
-│              │  │   Extra Keys Bar    │    │                   │
-│              │  │ Tab Ctrl Esc ↑↓←→  │    │                   │
-│              │  └─────────────────────┘    │                   │
-│              └─────────────────────────────┘                   │
+│         ┌───────────────────▼───────────────────┐              │
+│         │           Claude Remote                │              │
+│         │                                        │              │
+│         │   Auto-scan → Server list → Connect    │              │
+│         │                                        │              │
+│         │   ┌─────────┐   ┌──────────────────┐  │              │
+│         │   │Terminal │   │  Sessions list   │  │              │
+│         │   │ Emulator│   │  + /continue     │  │              │
+│         │   └─────────┘   └──────────────────┘  │              │
+│         │                                        │              │
+│         │   ┌────────────────────────────────┐   │              │
+│         │   │  Tab  Ctrl+D  Esc  ↑ ↓ ← →   │   │              │
+│         │   └────────────────────────────────┘   │              │
+│         └───────────────────────────────────────┘              │
 └─────────────────────────────────────────────────────────────────┘
-
-Session Types
-─────────────
-Shell session  →  spawned inside tmux  →  persistent, resumable from iTerm2
-Claude session →  direct PTY, no tmux  →  resumable via `claude --continue`
 ```
 
-### Message Protocol
+---
 
-All communication is JSON over WebSocket:
+## 🔧 Manual Setup
 
-```jsonc
-// Client → Server: create session
-{ "type": "create_session", "cmd": "zsh", "rows": 40, "cols": 100 }
+### Server
 
-// Client → Server: input
-{ "type": "input", "session_id": "abc123", "data": "ls -la\r" }
+```bash
+git clone https://github.com/ishaquehassan/claude-remote-terminal.git
+cd claude-remote-terminal
+pip3 install websockets
+python3 server/server.py
+```
 
-// Client → Server: resize
-{ "type": "resize", "session_id": "abc123", "rows": 50, "cols": 120 }
+### App (build from source)
 
-// Server → Client: output
-{ "type": "output", "session_id": "abc123", "data": "..." }
+```bash
+cd app
+flutter pub get
+flutter build apk --release
+```
 
-// Server → Client: session list
-{ "type": "sessions", "sessions": [...] }
+---
+
+## ⚙️ Configuration
+
+Edit `server/server.py`:
+
+```python
+PORT = 8765
+AUTH_TOKEN = "xrlabs-remote-terminal-2024"  # change this
 ```
 
 ---
 
 ## 🖥️ Platform Support
 
-| Platform | Status | Package Manager | Notes |
-|----------|--------|----------------|-------|
-| macOS | ✅ Full support | Homebrew | Primary dev platform |
-| Ubuntu / Debian | ✅ Full support | apt | Tested on 22.04+ |
-| Arch Linux | ✅ Full support | pacman | |
-| Fedora / RHEL | ✅ Full support | dnf | |
-| Windows (WSL2) | ✅ Supported | apt (inside WSL) | Run installer inside WSL terminal |
-| Windows (native) | ❌ Not supported | — | Use WSL |
+| Platform | Status | Notes |
+|----------|--------|-------|
+| macOS | ✅ Full | Primary dev platform, iTerm2 handoff |
+| Ubuntu / Debian | ✅ Full | apt |
+| Arch Linux | ✅ Full | pacman |
+| Fedora / RHEL | ✅ Full | dnf |
+| Windows (WSL2) | ✅ Supported | Run installer inside WSL |
+| Windows (native) | ❌ | Use WSL |
 
 ---
 
 ## 📋 Requirements
 
-### Server (your computer)
+**Server:** Python 3.10+, tmux, macOS or Linux
 
-- Python 3.10 or higher
-- `websockets` >= 12.0 (installed automatically)
-- `tmux` (installed automatically by the installer)
-- macOS or Linux (or WSL on Windows)
-
-### Client (your phone)
-
-- Android 6.0 (API 23) or higher
-- Connected to the same local network as the server, or via SSH tunnel
-
-### Building the App (optional)
-
-- Flutter 3.x SDK
-- Android SDK / Android Studio
-- A connected Android device or emulator
+**App:** Android 6.0+ (API 23), same local network as server
 
 ---
 
 ## 📁 Project Structure
 
 ```
-remote-terminal/
+claude-remote-terminal/
 ├── server/
-│   ├── server.py          # Python WebSocket PTY server
-│   └── requirements.txt   # Python dependencies (websockets)
+│   └── server.py          # Python WebSocket PTY server
 ├── app/                   # Flutter Android app
-│   ├── lib/               # Dart source code
-│   ├── android/           # Android-specific config
-│   └── pubspec.yaml       # Flutter dependencies
+│   └── lib/
 ├── commands/
-│   └── continue-remote.md # Claude Code slash command definition
+│   └── continue-remote.md # Claude Code slash command
 ├── scripts/
-│   └── continue_remote.py # Script called by /continue-remote
-├── setup.sh               # Manual setup script
-├── start.sh               # Quick start script
+│   └── continue_remote.py # /continue-remote script
+├── install.sh             # One-command installer
+├── start.sh               # Quick server start
 └── README.md
 ```
 
 ---
 
-## 🤝 Contributing
-
-Pull requests are welcome. For major changes, open an issue first to discuss what you want to change.
-
-1. Fork the repo
-2. Create a feature branch (`git checkout -b feature/your-feature`)
-3. Commit your changes
-4. Push to the branch and open a Pull Request
-
----
-
 ## 📄 License
 
-MIT License — see [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE)
 
 ---
 
