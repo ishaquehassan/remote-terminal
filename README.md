@@ -12,7 +12,7 @@
 
 **Claude Code on your Android phone — resume AI coding sessions anywhere, over WebSocket PTY.**
 
-[Quick Install](#-quick-install) · [Features](#-features) · [Slash Commands](#-claude-code-slash-commands) · [Architecture](#-architecture) · [Manual Setup](#-manual-setup)
+[Quick Install](#-quick-install) · [Features](#-features) · [Pairing](#-device-pairing--security) · [Slash Commands](#-claude-code-slash-commands) · [Architecture](#-architecture) · [Manual Setup](#-manual-setup)
 
 </div>
 
@@ -105,6 +105,81 @@ Each found server shows:
 - A **Connect** button — tap once to connect
 
 If multiple people on the same network have the server running, you'll see all of them — pick the right one by name.
+
+---
+
+## 🔐 Device Pairing & Security
+
+Claude Remote doesn't just connect — it authenticates. Every phone must be paired before it can access your terminal. No random device on your network can ever connect without your approval.
+
+### First-time pairing flow
+
+```
+Phone opens app
+       ↓
+Auto-scans network → finds your Mac by name
+       ↓
+Taps Connect
+       ↓
+Server generates a 4-digit pairing code
+       ↓
+Mac automatically opens a browser page
+  ┌─────────────────────────────────┐
+  │                                 │
+  │   Pair your device              │
+  │                                 │
+  │       8  4  2  7                │
+  │                                 │
+  │   ████████████░░░░  45s left    │
+  │                                 │
+  └─────────────────────────────────┘
+       ↓
+Phone shows 4-digit input screen
+       ↓
+User enters the code
+       ↓
+Server verifies → device saved to paired_devices.json
+       ↓
+Connected ✓  →  Sessions screen
+```
+
+### Every connection after that
+
+```
+Phone opens app
+       ↓
+Auto-scans → finds Mac
+       ↓
+Taps Connect
+       ↓
+Server recognizes device ID → connects instantly
+       ↓
+Sessions screen  (no code, no friction)
+```
+
+### Security details
+
+- **Per-device IDs** — each phone has a unique device ID stored in `~/.remote-terminal/paired_devices.json`
+- **Wrong code = retry** — entering the wrong code keeps the session alive, you can try again
+- **Code expiry** — pairing codes expire automatically if unused within the time window
+- **Auth token** — all WebSocket connections require the server auth token (set in `server.py`)
+- **LAN only** — server binds to your local network, not exposed to the internet
+
+### Revoking access
+
+Lost your phone? Switching devices? Someone else on the network?
+
+Run this in any Claude Code session on your Mac:
+
+```
+/remote-devices-logout
+```
+
+What happens instantly:
+- Server wipes `~/.remote-terminal/paired_devices.json`
+- Every connected phone receives a `force_logout` signal
+- All phones are kicked to the server selection screen in real time
+- Next connection requires a fresh pairing code
 
 ---
 
