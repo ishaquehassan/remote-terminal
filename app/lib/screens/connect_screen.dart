@@ -32,6 +32,7 @@ class _ConnectScreenState extends State<ConnectScreen>
   bool _showManual = false;
   bool _autoConnecting = false;
   String _savedServerName = '';
+  bool _pairingPushed = false;
 
   // Radar animation
   late final AnimationController _radarCtrl;
@@ -159,12 +160,15 @@ class _ConnectScreenState extends State<ConnectScreen>
           );
         }
       });
-    } else if (svc.isPairRequired) {
+    } else if (svc.isPairRequired && !_pairingPushed) {
+      _pairingPushed = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted) {
           Navigator.of(context).push(
             MaterialPageRoute(builder: (_) => const PairingScreen()),
-          );
+          ).then((_) {
+            if (mounted) setState(() => _pairingPushed = false);
+          });
         }
       });
     } else if (_autoConnecting && !svc.isConnecting && !svc.isConnected) {
