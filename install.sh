@@ -4,7 +4,7 @@
 
 set -e
 
-REPO="ishaquehassan/remote-terminal"
+REPO="ishaquehassan/claude-remote-terminal"
 INSTALL_DIR="$HOME/.remote-terminal"
 RAW="https://raw.githubusercontent.com/$REPO/main"
 

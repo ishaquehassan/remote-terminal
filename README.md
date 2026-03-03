@@ -16,7 +16,7 @@
 
 <div align="center">
 
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Android-blue?style=flat-square&logo=apple)](https://github.com/ishaquehassan/remote-terminal)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Android-blue?style=flat-square&logo=apple)](https://github.com/ishaquehassan/claude-remote-terminal)
 [![Python](https://img.shields.io/badge/python-3.10%2B-yellow?style=flat-square&logo=python)](https://www.python.org/)
 [![Flutter](https://img.shields.io/badge/flutter-3.x-54C5F8?style=flat-square&logo=flutter)](https://flutter.dev/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green?style=flat-square)](LICENSE)
@@ -66,7 +66,7 @@ The Flutter app connects to your server over your local network (or via SSH tunn
 ### Step 1 — Run the installer on your Mac or Linux machine
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ishaquehassan/remote-terminal/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/ishaquehassan/claude-remote-terminal/main/install.sh | bash
 ```
 
 That's it. The installer will:
@@ -78,7 +78,7 @@ That's it. The installer will:
 
 ### Step 2 — Install the APK on your Android phone
 
-Download the latest APK from [Releases](https://github.com/ishaquehassan/remote-terminal/releases) and install it on your phone.
+Download the latest APK from [Releases](https://github.com/ishaquehassan/claude-remote-terminal/releases) and install it on your phone.
 
 Open the app, enter your computer's local IP address (printed by the installer), and connect.
 
@@ -103,7 +103,7 @@ If you prefer to clone and run manually:
 
 ```bash
 # Clone the repo
-git clone https://github.com/ishaquehassan/remote-terminal.git
+git clone https://github.com/ishaquehassan/claude-remote-terminal.git
 cd remote-terminal
 
 # Install Python dependencies
