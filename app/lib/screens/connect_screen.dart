@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -14,32 +15,81 @@ class ConnectScreen extends StatefulWidget {
   State<ConnectScreen> createState() => _ConnectScreenState();
 }
 
-class _ConnectScreenState extends State<ConnectScreen> {
-  final _hostCtrl = TextEditingController();
-  final _portCtrl = TextEditingController(text: '8765');
-  final _tokenCtrl = TextEditingController(text: 'xrlabs-remote-terminal-2024');
-
+class _ConnectScreenState extends State<ConnectScreen>
+    with TickerProviderStateMixin {
+  // Scan state
+  final List<DiscoveryResult> _servers = [];
   bool _scanning = false;
   int _scanDone = 0;
   int _scanTotal = 254;
 
+  // Manual entry
+  final _hostCtrl = TextEditingController();
+  final _portCtrl = TextEditingController(text: '8765');
+  final _tokenCtrl = TextEditingController(text: 'xrlabs-remote-terminal-2024');
+  bool _showManual = false;
+
+  // Radar animation
+  late final AnimationController _radarCtrl;
+  late final AnimationController _pulseCtrl;
+  late final Animation<double> _pulse;
+
   @override
   void initState() {
     super.initState();
-    _loadSaved();
+    _radarCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 2),
+    )..repeat();
+    _pulseCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _pulse = Tween(begin: 0.6, end: 1.0).animate(
+      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
+    );
+    _loadPrefs().then((_) => _scan());
   }
 
-  Future<void> _loadSaved() async {
+  @override
+  void dispose() {
+    _radarCtrl.dispose();
+    _pulseCtrl.dispose();
+    _hostCtrl.dispose();
+    _portCtrl.dispose();
+    _tokenCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadPrefs() async {
     final prefs = await SharedPreferences.getInstance();
-    final host = prefs.getString('host') ?? '';
-    setState(() {
-      _hostCtrl.text = host;
-      _portCtrl.text = prefs.getString('port') ?? '8765';
-      _tokenCtrl.text = prefs.getString('token') ?? 'xrlabs-remote-terminal-2024';
-    });
-    if (host.isNotEmpty && mounted) {
-      _connect();
+    if (mounted) {
+      setState(() {
+        _hostCtrl.text = prefs.getString('host') ?? '';
+        _portCtrl.text = prefs.getString('port') ?? '8765';
+        _tokenCtrl.text = prefs.getString('token') ?? 'xrlabs-remote-terminal-2024';
+      });
     }
+  }
+
+  Future<void> _scan() async {
+    if (_scanning) return;
+    setState(() {
+      _scanning = true;
+      _servers.clear();
+      _scanDone = 0;
+    });
+
+    await DiscoveryService.scan(
+      onProgress: (done, total) {
+        if (mounted) setState(() { _scanDone = done; _scanTotal = total; });
+      },
+      onFound: (result) {
+        if (mounted) setState(() => _servers.add(result));
+      },
+    );
+
+    if (mounted) setState(() => _scanning = false);
   }
 
   Future<void> _save() async {
@@ -49,84 +99,25 @@ class _ConnectScreenState extends State<ConnectScreen> {
     await prefs.setString('token', _tokenCtrl.text.trim());
   }
 
-  Future<void> _scan() async {
-    final s = S(context.read<LanguageService>().isUrdu);
-    setState(() { _scanning = true; _scanDone = 0; });
-
-    final results = await DiscoveryService.scan(
-      onProgress: (done, total) {
-        if (mounted) setState(() { _scanDone = done; _scanTotal = total; });
-      },
-    );
-
-    if (!mounted) return;
-    setState(() => _scanning = false);
-
-    if (results.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(s.noServerFound),
-          backgroundColor: const Color(0xFF1E2A3A),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
-    if (results.length == 1) {
-      _hostCtrl.text = results.first.host;
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${s.serverFound} ${results.first.host}'),
-          backgroundColor: const Color(0xFFE07845).withAlpha(200),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
-    if (!mounted) return;
-    final picked = await showDialog<String>(
-      context: context,
-      builder: (_) => AlertDialog(
-        backgroundColor: const Color(0xFF0F1621),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(s.pickServer, style: const TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: results.map((r) => ListTile(
-            leading: const Icon(Icons.computer, color: Color(0xFFE07845), size: 18),
-            title: Text(r.host, style: const TextStyle(color: Colors.white, fontSize: 14)),
-            onTap: () => Navigator.pop(context, r.host),
-          )).toList(),
-        ),
-      ),
-    );
-    if (picked != null) _hostCtrl.text = picked;
-  }
-
-  Future<void> _connect() async {
-    final host = _hostCtrl.text.trim();
-    final port = int.tryParse(_portCtrl.text.trim()) ?? 8765;
-    final token = _tokenCtrl.text.trim();
-
-    if (host.isEmpty) {
-      final s = S(context.read<LanguageService>().isUrdu);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(s.enterHostFirst),
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
-      return;
-    }
-
+  Future<void> _connectTo(DiscoveryResult r) async {
+    _hostCtrl.text = r.host;
     await _save();
     if (!mounted) return;
     final svc = context.read<TerminalService>();
+    final port = int.tryParse(_portCtrl.text.trim()) ?? 8765;
+    final token = _tokenCtrl.text.trim();
+    await svc.connect(r.host, port, token);
+  }
+
+  Future<void> _connectManual() async {
+    final host = _hostCtrl.text.trim();
+    if (host.isEmpty) return;
+    await _save();
+    if (!mounted) return;
+    final svc = context.read<TerminalService>();
+    final port = int.tryParse(_portCtrl.text.trim()) ?? 8765;
+    final token = _tokenCtrl.text.trim();
     await svc.connect(host, port, token);
-    // Navigation build() mein hoti hai jab isConnected true ho
   }
 
   @override
@@ -146,244 +137,352 @@ class _ConnectScreenState extends State<ConnectScreen> {
     }
 
     return Scaffold(
-      backgroundColor: const Color(0xFF080B12),
+      backgroundColor: const Color(0xFF0D0B09),
       body: Stack(
         children: [
-          // Background gradient circles
+          // Background glow circles
           Positioned(
-            top: -80, right: -60,
+            top: -100, right: -60,
             child: Container(
-              width: 240, height: 240,
+              width: 280, height: 280,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFFE07845).withAlpha(12),
+                color: const Color(0xFFE07845).withAlpha(10),
               ),
             ),
           ),
           Positioned(
-            bottom: 60, left: -80,
+            bottom: 80, left: -80,
             child: Container(
               width: 200, height: 200,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: const Color(0xFF6C63FF).withAlpha(15),
+                color: const Color(0xFFE07845).withAlpha(7),
               ),
             ),
           ),
 
           SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const SizedBox(height: 16),
-
-                  // Language toggle — top right
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: LangToggle(lang: lang),
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // Logo + title
-                  Row(
-                    children: [
-                      Container(
-                        width: 52, height: 52,
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(
-                            colors: [Color(0xFFE07845), Color(0xFFBF5530)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
-                          ),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFFE07845).withAlpha(80),
-                              blurRadius: 16,
-                              offset: const Offset(0, 4),
-                            ),
-                          ],
-                        ),
-                        child: const Icon(Icons.terminal, color: Colors.black, size: 26),
-                      ),
-                      const SizedBox(width: 14),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Claude Remote',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: -0.3,
-                            ),
-                          ),
-                          Text(
-                            s.appSubtitle,
-                            style: const TextStyle(color: Color(0xFF4A5568), fontSize: 12),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 40),
-
-                  // Form card
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF0F1621),
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: const Color(0xFF1E2A3A), width: 1),
-                    ),
+            child: Column(
+              children: [
+                _buildHeader(lang, s),
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
                     child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        // Scan button
-                        SizedBox(
-                          width: double.infinity,
-                          height: 48,
-                          child: OutlinedButton.icon(
-                            onPressed: _scanning ? null : _scan,
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(
-                                color: _scanning
-                                    ? const Color(0xFF2D3748)
-                                    : const Color(0xFFE07845).withAlpha(180),
-                              ),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                              backgroundColor: _scanning
-                                  ? Colors.transparent
-                                  : const Color(0xFFE07845).withAlpha(10),
-                            ),
-                            icon: _scanning
-                                ? SizedBox(
-                                    width: 16, height: 16,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 1.5,
-                                      value: _scanTotal > 0 ? _scanDone / _scanTotal : null,
-                                      color: const Color(0xFFE07845),
-                                    ),
-                                  )
-                                : const Icon(Icons.radar, color: Color(0xFFE07845), size: 18),
-                            label: Text(
-                              _scanning
-                                  ? s.scanning(_scanDone, _scanTotal)
-                                  : s.scanBtn,
-                              style: TextStyle(
-                                color: _scanning
-                                    ? const Color(0xFF4A5568)
-                                    : const Color(0xFFE07845),
-                                fontSize: 13,
-                              ),
-                            ),
-                          ),
-                        ),
-
+                        const SizedBox(height: 24),
+                        _buildScanCard(s),
+                        const SizedBox(height: 20),
+                        if (_servers.isNotEmpty || _scanning) _buildServerSection(s, svc),
+                        if (svc.errorMsg != null) ...[
+                          const SizedBox(height: 12),
+                          _buildError(svc.errorMsg!),
+                        ],
                         const SizedBox(height: 16),
-                        Row(
-                          children: [
-                            Expanded(child: Divider(color: const Color(0xFF1E2A3A))),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              child: Text(s.orManually, style: const TextStyle(color: Color(0xFF2D3748), fontSize: 11)),
-                            ),
-                            Expanded(child: Divider(color: const Color(0xFF1E2A3A))),
-                          ],
-                        ),
-                        const SizedBox(height: 16),
-
-                        _field('Mac IP / Host', _hostCtrl, hint: '192.168.x.x'),
-                        const SizedBox(height: 10),
-                        _field('Port', _portCtrl, hint: '8765', number: true),
-                        const SizedBox(height: 10),
-                        _field('Auth Token', _tokenCtrl, hint: 'token', obscure: true),
+                        _buildManualToggle(s, svc),
                       ],
                     ),
                   ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-                  if (svc.errorMsg != null) ...[
-                    const SizedBox(height: 14),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: Colors.redAccent.withAlpha(20),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: Colors.redAccent.withAlpha(50)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.error_outline, color: Colors.redAccent, size: 16),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              svc.errorMsg!,
-                              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
-                            ),
-                          ),
-                        ],
-                      ),
+  Widget _buildHeader(LanguageService lang, S s) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 16, 0),
+      child: Row(
+        children: [
+          Container(
+            width: 44, height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFE07845), Color(0xFFBF5530)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(14),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFE07845).withAlpha(70),
+                  blurRadius: 12, offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Claude Remote',
+                  style: TextStyle(
+                    color: Colors.white, fontSize: 18,
+                    fontWeight: FontWeight.w700, letterSpacing: -0.3,
+                  ),
+                ),
+                Text(
+                  s.appSubtitle,
+                  style: const TextStyle(color: Color(0xFF6B7280), fontSize: 11),
+                ),
+              ],
+            ),
+          ),
+          LangToggle(lang: lang),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScanCard(S s) {
+    final pct = _scanTotal > 0 ? _scanDone / _scanTotal : 0.0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1510),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2A1E0F), width: 1),
+      ),
+      child: Row(
+        children: [
+          // Radar animation
+          SizedBox(
+            width: 52, height: 52,
+            child: _scanning
+                ? AnimatedBuilder(
+                    animation: _radarCtrl,
+                    builder: (ctx, child) => CustomPaint(
+                      painter: _RadarPainter(_radarCtrl.value),
                     ),
-                  ],
-
-                  const Spacer(),
-
-                  // Connect button
-                  SizedBox(
-                    width: double.infinity,
-                    height: 54,
-                    child: ElevatedButton(
-                      onPressed: (svc.isConnecting || _scanning) ? null : _connect,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFFE07845),
-                        foregroundColor: Colors.black,
-                        disabledBackgroundColor: const Color(0xFF1A2030),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        elevation: svc.isConnecting ? 0 : 8,
-                        shadowColor: const Color(0xFFE07845).withAlpha(100),
+                  )
+                : FadeTransition(
+                    opacity: _pulse,
+                    child: Container(
+                      width: 52, height: 52,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: const Color(0xFFE07845).withAlpha(20),
+                        border: Border.all(color: const Color(0xFFE07845).withAlpha(60), width: 1),
                       ),
-                      child: svc.isConnecting
-                          ? Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                const SizedBox(
-                                  width: 18, height: 18,
-                                  child: CircularProgressIndicator(
-                                    strokeWidth: 2, color: Color(0xFFE07845),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  s.connecting,
-                                  style: const TextStyle(color: Color(0xFF4A5568), fontSize: 15),
-                                ),
-                              ],
-                            )
-                          : Text(
-                              s.connect,
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0.3,
-                              ),
-                            ),
+                      child: const Icon(Icons.wifi_find, color: Color(0xFFE07845), size: 22),
                     ),
                   ),
-                  const SizedBox(height: 24),
-                ],
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  _scanning
+                      ? s.scanning(_scanDone, _scanTotal)
+                      : _servers.isEmpty
+                          ? (context.read<LanguageService>().isUrdu
+                              ? 'Koi server nahi mila'
+                              : 'No servers found')
+                          : (context.read<LanguageService>().isUrdu
+                              ? '${_servers.length} server mila!'
+                              : '${_servers.length} server${_servers.length == 1 ? '' : 's'} found!'),
+                  style: const TextStyle(
+                    color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(3),
+                  child: LinearProgressIndicator(
+                    value: _scanning ? pct : 1.0,
+                    backgroundColor: const Color(0xFF2A2A2A),
+                    color: _servers.isNotEmpty
+                        ? const Color(0xFFE07845)
+                        : _scanning
+                            ? const Color(0xFFE07845).withAlpha(180)
+                            : const Color(0xFF3A3A3A),
+                    minHeight: 4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Rescan button
+          GestureDetector(
+            onTap: _scanning ? null : _scan,
+            child: Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: _scanning
+                    ? const Color(0xFF1F1F1F)
+                    : const Color(0xFFE07845).withAlpha(20),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _scanning
+                      ? const Color(0xFF2A2A2A)
+                      : const Color(0xFFE07845).withAlpha(80),
+                  width: 1,
+                ),
+              ),
+              child: Icon(
+                Icons.refresh,
+                color: _scanning ? const Color(0xFF3A3A3A) : const Color(0xFFE07845),
+                size: 18,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildServerSection(S s, TerminalService svc) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_servers.isNotEmpty) ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 10),
+            child: Text(
+              context.read<LanguageService>().isUrdu
+                  ? 'Available servers'
+                  : 'Available servers',
+              style: const TextStyle(
+                color: Color(0xFF6B7280), fontSize: 11,
+                fontWeight: FontWeight.w500, letterSpacing: 0.5,
+              ),
+            ),
+          ),
+          ...List.generate(_servers.length, (i) {
+            final r = _servers[i];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 10),
+              child: _ServerCard(
+                result: r,
+                isConnecting: svc.isConnecting,
+                onTap: svc.isConnecting ? null : () => _connectTo(r),
+              ),
+            );
+          }),
+        ],
+        if (_scanning && _servers.isEmpty)
+          const _SearchingPlaceholder(),
+      ],
+    );
+  }
+
+  Widget _buildError(String msg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.redAccent.withAlpha(20),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: Colors.redAccent.withAlpha(50)),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.error_outline, color: Colors.redAccent, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              msg,
+              style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildManualToggle(S s, TerminalService svc) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _showManual = !_showManual),
+          child: Row(
+            children: [
+              const Expanded(child: Divider(color: Color(0xFF2A2A2A))),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Row(
+                  children: [
+                    Text(
+                      context.read<LanguageService>().isUrdu
+                          ? 'ya manually enter karo'
+                          : 'or enter manually',
+                      style: const TextStyle(color: Color(0xFF4A5568), fontSize: 11),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      _showManual ? Icons.expand_less : Icons.expand_more,
+                      color: const Color(0xFF4A5568), size: 14,
+                    ),
+                  ],
+                ),
+              ),
+              const Expanded(child: Divider(color: Color(0xFF2A2A2A))),
+            ],
+          ),
+        ),
+        if (_showManual) ...[
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF1A1510),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0xFF2A1E0F), width: 1),
+            ),
+            child: Column(
+              children: [
+                _field('Mac IP / Host', _hostCtrl, hint: '192.168.x.x'),
+                const SizedBox(height: 10),
+                _field('Port', _portCtrl, hint: '8765', number: true),
+                const SizedBox(height: 10),
+                _field('Auth Token', _tokenCtrl, hint: 'token', obscure: true),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    onPressed: (svc.isConnecting) ? null : _connectManual,
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFE07845),
+                      foregroundColor: Colors.white,
+                      disabledBackgroundColor: const Color(0xFF2A1E0F),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      elevation: 0,
+                    ),
+                    child: svc.isConnecting
+                        ? const SizedBox(
+                            width: 18, height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Color(0xFFE07845),
+                            ),
+                          )
+                        : Text(
+                            s.connect,
+                            style: const TextStyle(
+                              fontSize: 14, fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ],
     );
   }
 
@@ -405,15 +504,15 @@ class _ConnectScreenState extends State<ConnectScreen> {
         labelStyle: const TextStyle(color: Color(0xFF4A5568), fontSize: 13),
         hintStyle: const TextStyle(color: Color(0xFF2D3748)),
         filled: true,
-        fillColor: const Color(0xFF0D1117),
+        fillColor: const Color(0xFF0D0A07),
         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFF1E2A3A)),
+          borderSide: const BorderSide(color: Color(0xFF2A1E0F)),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
-          borderSide: const BorderSide(color: Color(0xFF1E2A3A)),
+          borderSide: const BorderSide(color: Color(0xFF2A1E0F)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(10),
@@ -422,4 +521,234 @@ class _ConnectScreenState extends State<ConnectScreen> {
       ),
     );
   }
+}
+
+// ── Server Card ────────────────────────────────────────────────────────────────
+
+class _ServerCard extends StatelessWidget {
+  final DiscoveryResult result;
+  final bool isConnecting;
+  final VoidCallback? onTap;
+  const _ServerCard({
+    required this.result,
+    required this.isConnecting,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1510),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: const Color(0xFFE07845).withAlpha(isConnecting ? 40 : 80),
+            width: 1,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFFE07845).withAlpha(15),
+              blurRadius: 12, offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            // PC icon with glow
+            Container(
+              width: 48, height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE07845).withAlpha(18),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE07845).withAlpha(50), width: 1),
+              ),
+              child: const Icon(Icons.computer, color: Color(0xFFE07845), size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    result.displayName,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: -0.2,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  const SizedBox(height: 3),
+                  Row(
+                    children: [
+                      Container(
+                        width: 6, height: 6,
+                        decoration: const BoxDecoration(
+                          color: Color(0xFF4ADE80),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                      const SizedBox(width: 5),
+                      Text(
+                        '${result.host}  ·  :${result.port}',
+                        style: const TextStyle(
+                          color: Color(0xFF6B7280),
+                          fontSize: 11,
+                          fontFamily: 'JetBrainsMono',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE07845),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Text(
+                'Connect',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ── Searching placeholder ──────────────────────────────────────────────────────
+
+class _SearchingPlaceholder extends StatelessWidget {
+  const _SearchingPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: const Color(0xFF1A1510),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: const Color(0xFF2A1E0F), width: 1),
+      ),
+      child: const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 14, height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 1.5, color: Color(0xFF6B7280),
+            ),
+          ),
+          SizedBox(width: 10),
+          Text(
+            'Looking for servers...',
+            style: TextStyle(color: Color(0xFF6B7280), fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Radar painter ──────────────────────────────────────────────────────────────
+
+class _RadarPainter extends CustomPainter {
+  final double progress;
+  _RadarPainter(this.progress);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final r = size.width / 2;
+
+    // Outer circle
+    canvas.drawCircle(
+      Offset(cx, cy), r - 2,
+      Paint()
+        ..color = const Color(0xFFE07845).withAlpha(30)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    // Middle circle
+    canvas.drawCircle(
+      Offset(cx, cy), (r - 2) * 0.6,
+      Paint()
+        ..color = const Color(0xFFE07845).withAlpha(20)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+    // Inner circle
+    canvas.drawCircle(
+      Offset(cx, cy), (r - 2) * 0.3,
+      Paint()
+        ..color = const Color(0xFFE07845).withAlpha(25)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+
+    // Rotating sweep
+    final angle = progress * 2 * pi;
+    final sweepPath = Path()
+      ..moveTo(cx, cy)
+      ..lineTo(
+        cx + (r - 2) * cos(angle - pi / 2),
+        cy + (r - 2) * sin(angle - pi / 2),
+      )
+      ..arcTo(
+        Rect.fromCircle(center: Offset(cx, cy), radius: r - 2),
+        angle - pi / 2,
+        -pi / 2,
+        false,
+      )
+      ..close();
+
+    canvas.drawPath(
+      sweepPath,
+      Paint()
+        ..shader = RadialGradient(
+          colors: [
+            const Color(0xFFE07845).withAlpha(60),
+            const Color(0xFFE07845).withAlpha(0),
+          ],
+        ).createShader(Rect.fromCircle(center: Offset(cx, cy), radius: r)),
+    );
+
+    // Sweep line
+    canvas.drawLine(
+      Offset(cx, cy),
+      Offset(
+        cx + (r - 2) * cos(angle - pi / 2),
+        cy + (r - 2) * sin(angle - pi / 2),
+      ),
+      Paint()
+        ..color = const Color(0xFFE07845).withAlpha(200)
+        ..strokeWidth = 1.5
+        ..strokeCap = StrokeCap.round,
+    );
+
+    // Center dot
+    canvas.drawCircle(
+      Offset(cx, cy), 3,
+      Paint()..color = const Color(0xFFE07845),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RadarPainter old) => old.progress != progress;
 }

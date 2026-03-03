@@ -25,6 +25,7 @@ import struct
 import subprocess
 import threading
 import uuid
+import socket as socket_module
 from collections import defaultdict
 
 PORT = 8765
@@ -361,6 +362,15 @@ async def handler(websocket):
                 continue
 
             t = msg.get("type")
+
+            # ── info — no auth required, used by discovery ────────────────────
+            if t == "info":
+                await tx({
+                    "type": "info_response",
+                    "hostname": socket_module.gethostname(),
+                    "version": "1.0",
+                })
+                continue
 
             if t == "auth":
                 if msg.get("token") == AUTH_TOKEN:

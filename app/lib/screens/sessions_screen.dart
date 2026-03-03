@@ -150,14 +150,6 @@ class _Header extends StatelessWidget {
                   ],
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.power_settings_new, color: Color(0xFF4A5568), size: 20),
-                tooltip: s.disconnect,
-                onPressed: () {
-                  svc.disconnect();
-                  Navigator.of(context).pop();
-                },
-              ),
             ],
           ),
         ),
