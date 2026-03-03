@@ -55,12 +55,12 @@ The installer handles everything:
 - Installs Python 3, `websockets`, and `tmux` if missing
 - Optionally installs **Claude Code** (`@anthropic-ai/claude-code`) — includes Node.js if needed
 - Sets up the `/continue-remote` slash command
-- Creates a global `remote-terminal` launcher
+- Creates a global `claude-remote` launcher
 
 Then start the server:
 
 ```bash
-remote-terminal
+claude-remote
 ```
 
 ### Step 2 — Install the app on your Android phone
@@ -78,7 +78,7 @@ Open the app — it auto-scans your network and shows your Mac by name. Tap to c
 ```
 1. Install server on Mac        →  curl ... | bash
          ↓
-2. Start server                 →  remote-terminal
+2. Start server                 →  claude-remote
          ↓
 3. Open app on phone            →  auto-scans network
          ↓

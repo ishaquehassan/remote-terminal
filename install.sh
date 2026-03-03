@@ -192,7 +192,7 @@ fi
 # ── Create launcher ────────────────────────────────────────────────────────────
 step "[ 6 / 6 ]  Creating launcher..."
 
-LAUNCHER="$INSTALL_DIR/remote-terminal"
+LAUNCHER="$INSTALL_DIR/claude-remote"
 cat > "$LAUNCHER" << SCRIPT
 #!/bin/bash
 if [[ "\$OSTYPE" == "darwin"* ]]; then
@@ -200,7 +200,7 @@ if [[ "\$OSTYPE" == "darwin"* ]]; then
 else
     IP=\$(hostname -I 2>/dev/null | awk '{print \$1}' || echo "unknown")
 fi
-echo "Remote Terminal Server"
+echo "Claude Remote Server"
 echo "  IP    : \$IP"
 echo "  Port  : 8765"
 echo "  Token : xrlabs-remote-terminal-2024"
@@ -211,12 +211,12 @@ chmod +x "$LAUNCHER"
 
 for dir in /usr/local/bin "$HOME/.local/bin" "$HOME/bin"; do
     if [[ ":$PATH:" == *":$dir:"* ]] || [ "$dir" = "/usr/local/bin" ]; then
-        sudo ln -sf "$LAUNCHER" "$dir/remote-terminal" 2>/dev/null \
-            || ln -sf "$LAUNCHER" "$dir/remote-terminal" 2>/dev/null || true
+        sudo ln -sf "$LAUNCHER" "$dir/claude-remote" 2>/dev/null \
+            || ln -sf "$LAUNCHER" "$dir/claude-remote" 2>/dev/null || true
         break
     fi
 done
-ok "Launcher: remote-terminal (available globally)"
+ok "Launcher: claude-remote (available globally)"
 
 # ── Get IP ─────────────────────────────────────────────────────────────────────
 if [ "$OS" = "mac" ]; then
@@ -244,7 +244,7 @@ echo -e "  1. Install the APK on your Android phone"
 echo -e "     ${CYAN}https://github.com/$REPO/releases/latest${NC}"
 echo ""
 echo -e "  2. Start the server:"
-echo -e "     ${CYAN}remote-terminal${NC}"
+echo -e "     ${CYAN}claude-remote${NC}"
 echo ""
 echo -e "  3. In the phone app, connect to:"
 echo -e "     ${CYAN}ws://$IP:8765${NC}"
