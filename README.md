@@ -387,6 +387,21 @@ python3 test_history.py --cycles 2 --prompts 6 --output ./results
 
 ---
 
+## 🚢 Release Checklist
+
+Before pushing a new version:
+
+1. Bump `SERVER_VERSION` in `server/server.py` — must match the GitHub Release tag exactly (no `v` prefix)
+2. Bump `version` in `app/pubspec.yaml` (e.g. `1.5.0+5`)
+3. Update `CHANGELOG.md`
+4. Build APK: `flutter build apk --release` inside `app/`
+5. Commit + push
+6. Create GitHub Release with the matching tag (e.g. `v1.5.0`) and attach the APK
+
+> **Why `SERVER_VERSION` matters:** the self-update feature compares this value against the latest GitHub Release tag. If it's not bumped, users will see a false "update available" banner forever — and triggering self_update will just re-download the same file.
+
+---
+
 ## 📄 License
 
 MIT — see [LICENSE](LICENSE)

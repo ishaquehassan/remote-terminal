@@ -35,6 +35,11 @@ import tempfile
 PORT = 8765
 AUTH_TOKEN = "xrlabs-remote-terminal-2024"
 SCROLLBACK_SIZE = 100 * 1024  # 100 KB per session
+# ⚠️  IMPORTANT: bump this before every release push.
+# Self-update compares this against GitHub Releases tag.
+# If this is stale, connected apps will keep seeing "update available"
+# even after updating — and self_update will re-download the same file.
+# Format must match the GitHub Release tag exactly (no 'v' prefix).
 SERVER_VERSION = "1.4.0"
 GITHUB_REPO = "ishaquehassan/claude-remote-terminal"
 
