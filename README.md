@@ -70,6 +70,20 @@ No need to run anything manually — by the time the installer finishes, the ser
 
 Download `claude-remote-v1.4.0.apk` from [Releases](https://github.com/ishaquehassan/claude-remote-terminal/releases/latest) and install it.
 
+---
+
+## 🔁 Updating
+
+Already installed? Just re-run the same installer:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ishaquehassan/claude-remote-terminal/main/install.sh | bash
+```
+
+It re-downloads `server.py`, restarts the LaunchAgent (Mac) or systemd service (Linux), and re-copies the Claude slash commands. Your paired devices are not affected.
+
+For the Android app — download the latest APK from [Releases](https://github.com/ishaquehassan/claude-remote-terminal/releases/latest) and install it over the existing one.
+
 Open the app — it auto-scans your network and shows your Mac by name. Tap to connect.
 
 **That's it.**
