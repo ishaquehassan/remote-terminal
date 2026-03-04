@@ -387,6 +387,17 @@ python3 test_history.py --cycles 2 --prompts 6 --output ./results
 
 ---
 
+## 📌 Planned — v1.5.0
+
+> Full implementation details: [docs/qr-pairing-internet-plan.md](docs/qr-pairing-internet-plan.md)
+
+- [ ] **QR Code Pairing** — Replace 4-digit PIN with QR scanner. Mac browser auto-opens QR, phone scans it, paired instantly. No manual code entry.
+- [ ] **Auto-close browser page** — Browser pairing page detects successful pair via WebSocket and calls `window.close()` automatically. Shows ✓ success card for 1.5s first.
+- [ ] **Tailscale IP in QR** — Server embeds its Tailscale IP (`100.x.x.x`) inside the QR. App saves it alongside local IP.
+- [ ] **Auto internet fallback** — App tries local IP first, if it fails (outside home network) automatically falls back to Tailscale IP. Zero manual input ever again.
+
+---
+
 ## 🚢 Release Checklist
 
 Before pushing a new version:
