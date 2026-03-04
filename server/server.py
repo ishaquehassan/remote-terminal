@@ -29,10 +29,14 @@ import socket as socket_module
 from collections import defaultdict
 import random
 import time
+import urllib.request
+import tempfile
 
 PORT = 8765
 AUTH_TOKEN = "xrlabs-remote-terminal-2024"
 SCROLLBACK_SIZE = 100 * 1024  # 100 KB per session
+SERVER_VERSION = "1.4.0"
+GITHUB_REPO = "ishaquehassan/claude-remote-terminal"
 
 # tmux path — auto-detect so it works on Mac (brew) and Linux (apt)
 TMUX = shutil.which("tmux") or "tmux"
@@ -62,6 +66,49 @@ def save_paired(devices):
 
 paired_devices = load_paired()
 pending_pairs  = {}  # device_id -> {"code": "1234", "expires": float}
+
+
+# ── Self-update helpers ────────────────────────────────────────────────────────
+
+def version_gt(a: str, b: str) -> bool:
+    """Return True if version string a > b."""
+    try:
+        return tuple(int(x) for x in a.split(".")) > tuple(int(x) for x in b.split("."))
+    except Exception:
+        return False
+
+
+def _fetch_latest_version() -> str:
+    """Sync: fetch latest release tag from GitHub API. Returns version string or ''."""
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+    req = urllib.request.Request(url, headers={"User-Agent": "claude-remote-server"})
+    with urllib.request.urlopen(req, timeout=10) as resp:
+        data = json.loads(resp.read())
+    return data.get("tag_name", "").lstrip("v")
+
+
+def _download_server() -> bytes:
+    """Sync: download latest server.py from main branch. Returns raw bytes."""
+    url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main/server/server.py"
+    req = urllib.request.Request(url, headers={"User-Agent": "claude-remote-server"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read()
+
+
+async def _startup_update_check():
+    """Background task: check for update ~8s after server start, broadcast if available."""
+    await asyncio.sleep(8)
+    try:
+        latest = await asyncio.to_thread(_fetch_latest_version)
+        if version_gt(latest, SERVER_VERSION):
+            print(f"\033[1;33m[updater] New version available: v{latest} (current: v{SERVER_VERSION})\033[0m")
+            msg = json.dumps({"type": "update_available", "current": SERVER_VERSION, "latest": latest})
+            for q in all_client_queues:
+                q.put_nowait(msg)
+        else:
+            print(f"[updater] Up to date (v{SERVER_VERSION})")
+    except Exception as e:
+        print(f"[updater] Startup check failed: {e}")
 
 
 # ─── PTY helpers ──────────────────────────────────────────────────────────────
@@ -564,7 +611,7 @@ async def handler(websocket):
                 await tx({
                     "type": "info_response",
                     "hostname": socket_module.gethostname(),
-                    "version": "1.0",
+                    "version": SERVER_VERSION,
                 })
                 continue
 
@@ -820,6 +867,42 @@ async def handler(websocket):
             elif t == "list_sessions":
                 await tx({"type": "sessions_list", "sessions": sessions_list()})
 
+            # ── check_update ─────────────────────────────────────────────────
+            elif t == "check_update":
+                try:
+                    latest = await asyncio.to_thread(_fetch_latest_version)
+                    if version_gt(latest, SERVER_VERSION):
+                        await tx({"type": "update_available", "current": SERVER_VERSION, "latest": latest})
+                    else:
+                        await tx({"type": "update_status", "up_to_date": True, "version": SERVER_VERSION})
+                except Exception as e:
+                    await tx({"type": "update_status", "error": str(e)})
+
+            # ── self_update ───────────────────────────────────────────────────
+            elif t == "self_update":
+                try:
+                    latest = await asyncio.to_thread(_fetch_latest_version)
+                    if not version_gt(latest, SERVER_VERSION):
+                        await tx({"type": "update_status", "up_to_date": True, "version": SERVER_VERSION})
+                        continue
+                    new_code = await asyncio.to_thread(_download_server)
+                    # Basic sanity check
+                    if b"asyncio" not in new_code or b"websockets" not in new_code:
+                        await tx({"type": "update_status", "error": "downloaded file looks invalid"})
+                        continue
+                    # Write to temp, then atomically replace self
+                    tmp_fd, tmp_path = tempfile.mkstemp(suffix=".py")
+                    with os.fdopen(tmp_fd, "wb") as f:
+                        f.write(new_code)
+                    shutil.move(tmp_path, os.path.abspath(__file__))
+                    print(f"\033[1;32m[updater] Updated to v{latest} — restarting in 1s...\033[0m")
+                    await tx({"type": "update_done", "version": latest})
+                    # Exit after brief delay so the response reaches the client
+                    asyncio.get_event_loop().call_later(1.0, lambda: os._exit(0))
+                except Exception as e:
+                    print(f"[updater] Self-update failed: {e}")
+                    await tx({"type": "update_status", "error": str(e)})
+
     except websockets.exceptions.ConnectionClosed:
         pass
     except Exception as e:
@@ -836,9 +919,10 @@ async def handler(websocket):
 
 
 async def main():
-    print(f"[server] ws://0.0.0.0:{PORT}")
+    print(f"[server] ws://0.0.0.0:{PORT}  v{SERVER_VERSION}")
     print(f"[server] token: {AUTH_TOKEN}")
     async with websockets.serve(handler, "0.0.0.0", PORT):
+        asyncio.create_task(_startup_update_check())
         await asyncio.Future()
 
 

@@ -9,6 +9,7 @@ All notable changes to Claude Remote are documented here.
 ### Added
 - **Session history persistence on resume** — Re-opening a session after app kill now shows the full previous terminal state. Server keeps a 100 KB rolling scrollback buffer per session and replays it instantly on re-attach. Works for both Claude and shell sessions.
 - **`test_history.py` — ADB automation test script** — Automated session history persistence tester. Launches app, creates a Claude session, sends N dynamic conversational prompts (randomised mix of short / medium / long each run), kills app, relaunches, reopens session, and verifies history is rendered correctly. Smart response detection via PNG size stability polling (no fixed sleeps). Cleans up all sessions after each cycle for a clean next run. Colourful terminal output + JSON report + per-step screenshots.
+- **Self-update** — Server checks GitHub Releases on startup and broadcasts `update_available` to all connected clients if a newer version exists. Supports `check_update` (manual check via WebSocket) and `self_update` (download latest `server.py`, replace self, restart via LaunchAgent/systemd) commands. Server version now exposed in `info_response` and startup log.
 
 ### Fixed
 - **Blank terminal on session resume** — After app kill + relaunch, tapping an existing session showed a blank terminal. Root cause: Flutter's `Terminal` object is in-memory and lost on kill; server's SIGWINCH-only repaint was insufficient when Claude is idle. Fixed by server-side scrollback replay on `attach`.
